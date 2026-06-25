@@ -1,0 +1,224 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "hideFrom": { "tooltip": false, "viz": false, "legend": false } },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "pieType": "pie"
+      },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes{job=\"node_exporter\"} - node_memory_MemAvailable_bytes{job=\"node_exporter\"}", "refId": "A", "legendFormat": "Used" },
+        { "expr": "node_memory_MemAvailable_bytes{job=\"node_exporter\"}", "refId": "B", "legendFormat": "Free" }
+      ],
+      "title": "Memory Usage",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 80 } ] },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": { "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "pluginVersion": "11.1.3",
+      "targets": [ { "expr": "100 * (1 - (avg(rate(node_cpu_seconds_total{job=\"node_exporter\",mode=\"idle\"}[5m]))))", "refId": "A" } ],
+      "title": "CPU Usage %",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 80 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [ { "expr": "100 * (1 - (node_memory_MemAvailable_bytes{job=\"node_exporter\"} / node_memory_MemTotal_bytes{job=\"node_exporter\"}))", "refId": "A", "legendFormat": "Memory Used %" } ],
+      "title": "Memory Used %",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [ { "expr": "up{job=\"node_exporter\"}", "refId": "A", "legendFormat": "Host up" } ],
+      "title": "Host Up",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "node_load1{job=\"node_exporter\"}", "refId": "A", "legendFormat": "1m" },
+        { "expr": "node_load5{job=\"node_exporter\"}", "refId": "B", "legendFormat": "5m" },
+        { "expr": "node_load15{job=\"node_exporter\"}", "refId": "C", "legendFormat": "15m" },
+        { "expr": "100 * (1 - (node_memory_MemAvailable_bytes{job=\"node_exporter\"} / node_memory_MemTotal_bytes{job=\"node_exporter\"}))", "refId": "D", "legendFormat": "Memory Used %" }
+      ],
+      "title": "Load Average + Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "dtdurations", "decimals": 0 }, "overrides": [] },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [ { "expr": "time() - node_boot_time_seconds{job=\"node_exporter\"}", "refId": "A", "legendFormat": "Uptime" } ],
+      "title": "Host Uptime",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        { "expr": "up{job=\"ipmi-exporter\"}", "refId": "A", "legendFormat": "Exporter up" },
+        { "expr": "ipmi_up{collector=\"ipmi\"}", "refId": "B", "legendFormat": "IPMI collector up" }
+      ],
+      "title": "IPMI Health",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "ipmi_temperature_celsius{job=\"ipmi_exporter\"}", "refId": "A", "legendFormat": "{{name}}" } ],
+      "title": "Temperature Sensors (°C)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "ipmi_fan_speed_rpm{job=\"ipmi_exporter\"}", "refId": "A", "legendFormat": "{{name}}" },
+        { "expr": "ipmi_fan_speed_ratio{job=\"ipmi_exporter\"}", "refId": "B", "legendFormat": "{{name}} (ratio)" }
+      ],
+      "title": "Fan Speed",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "nvidia_smi_utilization_gpu_ratio{job=\"nvidia_gpu_exporter\"} * 100", "refId": "A", "legendFormat": "GPU {{gpu}} util%" },
+        { "expr": "nvidia_smi_temperature_gpu{job=\"nvidia_gpu_exporter\"}", "refId": "B", "legendFormat": "GPU {{gpu}} temp" }
+      ],
+      "title": "GPU Utilization & Temperature",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "nvidia_smi_memory_used_bytes{job=\"nvidia_gpu_exporter\"}", "refId": "A", "legendFormat": "GPU {{gpu}} used" },
+        { "expr": "nvidia_smi_memory_total_bytes{job=\"nvidia_gpu_exporter\"}", "refId": "B", "legendFormat": "GPU {{gpu}} total" }
+      ],
+      "title": "GPU Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 }
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [ { "expr": "{job=\"varlogs\"}", "refId": "A" } ],
+      "title": "Kernel & System Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 }
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["server-monitoring"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Server Overview",
+  "uid": "server-overview",
+  "version": 0,
+  "weekStart": ""
+}

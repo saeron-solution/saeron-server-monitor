@@ -1,0 +1,167 @@
+================================================================================
+  MULTI-NODE MONITORING STACK REFACTORING - COMPLETE
+================================================================================
+
+✓ DIRECTORY STRUCTURE
+  ├── docker-compose.central.yml  (NEW - Central server: Prometheus, Loki, Grafana)
+  ├── docker-compose.edge.yml     (UPDATED - Edge nodes: exporters + promtail)
+  ├── docker-compose.yml          (LEGACY - Original all-in-one, kept for reference)
+  ├── .env.example                (UPDATED - New variables for multi-node setup)
+  ├── README.md                   (REWRITTEN - Comprehensive deployment guide)
+  ├── DEPLOYMENT.md               (NEW - Step-by-step multi-node deployment)
+  └── prometheus/
+      ├── prometheus.yml          (UPDATED - Loads edge-nodes.yml)
+      └── targets/
+          └── edge-nodes.yml      (NEW - Template for edge node registration)
+
+✓ CONFIGURATION FILES REFACTORED
+
+  .env.example
+  ├── NODE_NAME (node identifier)
+  ├── CENTRAL_HOST (central server IP)
+  ├── LOKI_URL (log push endpoint)
+  ├── GF_SECURITY_ADMIN_PASSWORD (Grafana credentials)
+  └── Exporter ports (NODE_EXPORTER_PORT, IPMI_EXPORTER_PORT, NVIDIA_GPU_EXPORTER_PORT)
+
+  docker-compose.central.yml
+  ├── prometheus (with file_sd_configs for targets/edge-nodes.yml)
+  ├── loki (receives logs from promtail agents)
+  └── grafana (auto-provisioned datasources)
+
+  docker-compose.edge.yml
+  ├── node-exporter (with ${NODE_EXPORTER_PORT} env var)
+  ├── ipmi-exporter (with ${IPMI_EXPORTER_PORT} env var)
+  ├── nvidia-gpu-exporter (with ${NVIDIA_GPU_EXPORTER_PORT} env var)
+  └── promtail (with ${LOKI_URL}, ${NODE_NAME} env vars)
+
+  prometheus/prometheus.yml
+  └── file_sd_configs loading prometheus/targets/edge-nodes.yml (30s refresh)
+
+  promtail/config.yml
+  └── Uses ${LOKI_URL}, ${NODE_NAME} environment variables
+
+  prometheus/targets/edge-nodes.yml
+  └── Template with example edge nodes (gpu-node-01, gpu-node-02, etc.)
+
+✓ COMPOSE FILE VALIDATION
+  ✓ docker-compose.central.yml   → VALID (prometheus, loki, grafana)
+  ✓ docker-compose.edge.yml      → VALID (node-exporter, ipmi, nvidia-gpu, promtail)
+  ✓ Existing dashboards          → INTACT (server-overview.json preserved)
+  ✓ Datasource provisioning      → INTACT (prometheus, loki auto-provisioned)
+
+✓ KEY FEATURES
+
+  Architecture:
+    - Metrics: Pull-based (Prometheus scrapes edge exporters)
+    - Logs: Push-based (Promtail pushes to central Loki)
+    - Central Grafana: Single pane of glass for all nodes
+    - No single point of failure for edge nodes (each is independent)
+
+  Environment Variables:
+    - NODE_NAME: Unique identifier for each edge node
+    - CENTRAL_HOST: Central server reachable from edges
+    - LOKI_URL: Log endpoint for remote push
+    - All exporter ports configurable per deployment
+
+  Prometheus Targets:
+    - Load from file_sd_configs (prometheus/targets/edge-nodes.yml)
+    - Supports DNS hostnames (gpu-node-01) or IP addresses (10.0.0.21)
+    - 30-second refresh interval (no restart needed to add nodes)
+
+  Promtail Logging:
+    - Labeled with node name (${NODE_NAME})
+    - Pushes to central Loki endpoint (${LOKI_URL})
+    - Queries in Grafana: {job="varlogs", node="gpu-node-01"}
+
+✓ DOCUMENTATION
+
+  README.md (1000+ lines)
+    ├── Architecture diagram
+    ├── Quick start (central + edge)
+    ├── Adding new nodes (4-step process)
+    ├── Configuration variables
+    ├── Validation commands
+    ├── Security best practices
+    ├── Troubleshooting guide
+    └── File structure and port mapping
+
+  DEPLOYMENT.md (400+ lines)
+    ├── Prerequisites (Docker, NVIDIA toolkit, IPMI)
+    ├── Central server setup
+    ├── Edge node setup (repeatable)
+    ├── Prometheus registration
+    ├── Remote access methods (VPN, SSH tunnel, reverse proxy)
+    ├── Validation commands (edge, central, Grafana)
+    ├── Troubleshooting
+    ├── Security best practices
+    ├── Scaling considerations
+    └── Maintenance tasks (weekly, monthly, quarterly)
+
+================================================================================
+  DEPLOYMENT WORKFLOW
+================================================================================
+
+CENTRAL SERVER (One instance)
+  1. git clone && cd server-observability
+  2. cp .env.example .env
+  3. Edit .env (CENTRAL_HOST, GF_SECURITY_ADMIN_PASSWORD)
+  4. docker compose -f docker-compose.central.yml up -d
+  5. Access Grafana: http://<central-ip>:3000
+
+EDGE NODE (Repeat for each GPU server)
+  1. git clone && cd server-observability
+  2. cp .env.example .env
+  3. Edit .env (NODE_NAME=gpu-node-01, CENTRAL_HOST=10.0.0.10, LOKI_URL=...)
+  4. docker compose -f docker-compose.edge.yml up -d
+  5. On central: Edit prometheus/targets/edge-nodes.yml, add node
+  6. curl -X POST http://central:9090/-/reload
+
+================================================================================
+  BACKWARDS COMPATIBILITY
+================================================================================
+
+✓ Existing deployments can continue using docker-compose.yml
+✓ All original services and configs preserved
+✓ Grafana dashboards and provisioning unchanged
+✓ Default ports maintained
+✓ No breaking changes to exporters or configurations
+
+================================================================================
+  VALIDATION COMMANDS
+================================================================================
+
+Central Server:
+  docker compose -f docker-compose.central.yml ps
+  curl http://localhost:9090/-/ready
+  curl http://localhost:3100/ready
+  curl -s http://localhost:9090/api/v1/targets | grep '"health"'
+
+Edge Node:
+  docker compose -f docker-compose.edge.yml ps
+  curl http://localhost:9100/metrics | head
+  curl http://localhost:9290/metrics | grep -E 'fan|temp' | head
+  curl http://localhost:9835/metrics | grep -E 'nvidia|gpu' | head
+
+Grafana:
+  http://<central-ip>:3000
+  → Dashboards > Server Overview
+  → Should show all registered edge nodes
+
+================================================================================
+  READY FOR GITHUB
+================================================================================
+
+✓ Multi-node architecture documented
+✓ Environment variables for all configuration
+✓ Two separate compose files for central + edge
+✓ Prometheus targets template for node registration
+✓ Comprehensive README with deployment, troubleshooting, security
+✓ Step-by-step DEPLOYMENT.md guide
+✓ All files validated and tested
+✓ Backwards compatible with existing setup
+✓ Production-ready security notes
+✓ Scaling guidance for 50+ nodes
+
+Next: Push to GitHub and share deployment guide with team!
+
+================================================================================
