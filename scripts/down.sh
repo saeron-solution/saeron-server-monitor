@@ -5,19 +5,19 @@ ROLE="${1:-}"
 
 case "$ROLE" in
   central)
-    COMPOSE_FILE="docker-compose.central.yml"
+    shift
+    exec "$(dirname "$0")/central-down.sh" "$@"
     ;;
   edge)
-    COMPOSE_FILE="docker-compose.edge.yml"
+    shift
+    exec "$(dirname "$0")/edge-down.sh" "$@"
     ;;
   *)
     echo "Usage: $0 central|edge"
+    echo
+    echo "Examples:"
+    echo "  $0 central"
+    echo "  $0 edge"
     exit 1
     ;;
 esac
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STACK_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${STACK_DIR}"
-
-docker compose -f "${COMPOSE_FILE}" down

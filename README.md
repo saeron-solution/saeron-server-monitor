@@ -1,275 +1,582 @@
-# Server Observability Stack (Prometheus + Grafana + Loki)
+# Server Observability Stack
 
-A production-ready multi-node monitoring stack for GPU clusters and distributed systems.
+Multi-node monitoring stack using Prometheus, Grafana, Loki, Node Exporter, IPMI Exporter, NVIDIA GPU Exporter, and Promtail.
+
+This repository supports two deployment roles:
+
+* **Central server**: runs Prometheus, Loki, and Grafana.
+* **Edge node**: runs exporters and Promtail.
+
+A central server may also run the edge stack if you want to monitor the central machine itself.
+
+---
 
 ## Architecture
 
-```
-[Edge GPU Nodes]                [Central Monitoring]        [User]
-├─ node-exporter :9100  ────┐
-├─ ipmi-exporter :9290    ───┼──→ Prometheus :9090  ───┐
-├─ nvidia-gpu-exporter :9835  │    Loki :3100         ├──→ Grafana :3000 ──→ Laptop
-└─ promtail (logs) ────────────→ (Receives logs)  ───┘
-                                   Grafana :3000
-```
+```text
+192.168.0.34 / Edge Node
+  ├─ node-exporter         :9100  ← scraped by Prometheus
+  ├─ ipmi-exporter         :9290  ← scraped by Prometheus
+  ├─ nvidia-gpu-exporter   :9835  ← scraped by Prometheus
+  └─ promtail                     → pushes logs to Loki
 
-- **Edge nodes** export metrics (pull model) and push logs (push model)
-- **Central server** scrapes metrics and receives logs
-- **Grafana** visualizes both metrics and logs from a single location
-
-## Quick Start
-
-### Central Server
-
-```bash
-cd /path/to/server-observability
-cp .env.example .env
-# Edit .env with your Grafana password and central host IP
-docker compose -f docker-compose.central.yml up -d
+192.168.0.73 / Central Server
+  ├─ Prometheus            :19090 host → :9090 container
+  ├─ Loki                  :13100 host → :3100 container
+  ├─ Grafana               :13000 host → :3000 container
+  ├─ node-exporter         :9100  optional, if central also monitored
+  ├─ ipmi-exporter         :9290  optional, if central also monitored
+  ├─ nvidia-gpu-exporter   :9835  optional, if central also monitored
+  └─ promtail                     optional, if central also monitored
 ```
 
-Access Grafana at `http://<central-host-ip>:3000`
+Metrics are **pull-based**:
 
-### Edge GPU Node
-
-```bash
-cd /path/to/server-observability
-cp .env.example .env
-# Edit .env:
-#   NODE_NAME=gpu-node-01 (or gpu-node-02, etc.)
-#   CENTRAL_HOST=10.0.0.10 (IP of central server)
-#   LOKI_URL=http://10.0.0.10:3100/loki/api/v1/push
-docker compose -f docker-compose.edge.yml up -d
+```text
+Prometheus on central → scrapes edge exporters
 ```
 
-Verify edge node is sending metrics:
-```bash
-curl localhost:9100/metrics | head -20
-curl localhost:9290/metrics | grep -E 'fan|temp' | head -5
-curl localhost:9835/metrics | grep -E 'nvidia|gpu' | head -5
+Logs are **push-based**:
+
+```text
+Promtail on edge → pushes logs to central Loki
 ```
+
+Grafana does not directly collect metrics. Grafana queries Prometheus and Loki.
+
+---
 
 ## Compose Files
 
-| File | Purpose | Runs On |
-|------|---------|---------|
-| `docker-compose.central.yml` | Prometheus, Loki, Grafana | Central server |
-| `docker-compose.edge.yml` | node-exporter, ipmi-exporter, nvidia-gpu-exporter, promtail | Edge GPU nodes |
-| `docker-compose.yml` | Original all-in-one (deprecated) | Legacy single-host |
+| File                         | Purpose                                                     | Run On                                   |
+| ---------------------------- | ----------------------------------------------------------- | ---------------------------------------- |
+| `docker-compose.central.yml` | Prometheus, Loki, Grafana                                   | Central server                           |
+| `docker-compose.edge.yml`    | node-exporter, ipmi-exporter, nvidia-gpu-exporter, promtail | Edge nodes and optionally central server |
 
-## Adding a New Edge Node
+---
 
-1. **Clone repo on new GPU server**
-   ```bash
-   git clone <repo-url> server-observability
-   cd server-observability
-   ```
+## Quick Start: Central Server
 
-2. **Configure .env**
-   ```bash
-   cp .env.example .env
-   # Edit NODE_NAME, LOKI_URL, CENTRAL_HOST
-   ```
+Example central server:
 
-3. **Start edge services**
-   ```bash
-   docker compose -f docker-compose.edge.yml up -d
-   ```
+```text
+192.168.0.73
+```
 
-4. **Add node to Prometheus targets on central server**
-   
-   Edit `prometheus/targets/edge-nodes.yml`:
-   ```yaml
-   - job_name: node-exporter
-     static_configs:
-       - targets:
-           - gpu-node-01:9100
-           - gpu-node-02:9100      # Add new node
-           - gpu-node-03:9100      # Add new node
-   ```
-
-5. **Reload Prometheus (from central server)**
-   ```bash
-   curl -X POST http://localhost:9090/-/reload
-   ```
-
-   Or restart Prometheus:
-   ```bash
-   docker compose -f docker-compose.central.yml restart prometheus
-   ```
-
-## Configuration
-
-### .env Variables
+Clone repo:
 
 ```bash
-NODE_NAME              # Node identifier (e.g., gpu-node-01)
-CENTRAL_HOST           # IP/hostname of central server (reachable from edges)
-LOKI_URL              # Loki endpoint for log push (e.g., http://10.0.0.10:3100/loki/api/v1/push)
-GF_SECURITY_ADMIN_USER    # Grafana admin username
-GF_SECURITY_ADMIN_PASSWORD # Grafana admin password
-NODE_EXPORTER_PORT    # node-exporter port (default 9100)
-IPMI_EXPORTER_PORT    # ipmi-exporter port (default 9290)
-NVIDIA_GPU_EXPORTER_PORT  # nvidia-gpu-exporter port (default 9835)
+git clone git@github.com:saeron-solution/saeron-server-monitor.git
+cd saeron-server-monitor
 ```
 
-### Prometheus Targets
+Create `.env`:
 
-Edit `prometheus/targets/edge-nodes.yml` to add/remove edge nodes:
+```bash
+cat > .env <<'EOF'
+NODE_NAME=gpu-73
+CENTRAL_HOST=192.168.0.73
+
+PROMETHEUS_PORT=19090
+LOKI_PORT=13100
+GRAFANA_PORT=13000
+
+GF_SECURITY_ADMIN_USER=admin
+GF_SECURITY_ADMIN_PASSWORD=change-this-password
+
+LOKI_URL=http://192.168.0.73:13100/loki/api/v1/push
+
+NODE_EXPORTER_PORT=9100
+IPMI_EXPORTER_PORT=9290
+NVIDIA_GPU_EXPORTER_PORT=9835
+EOF
+```
+
+Start central stack:
+
+```bash
+./scripts/central-up.sh
+```
+
+Or:
+
+```bash
+./scripts/up.sh central
+```
+
+Access:
+
+```text
+Grafana:    http://192.168.0.73:13000
+Prometheus: http://192.168.0.73:19090
+Loki:       http://192.168.0.73:13100
+```
+
+Stop central stack:
+
+```bash
+./scripts/central-down.sh
+```
+
+Or:
+
+```bash
+./scripts/down.sh central
+```
+
+---
+
+## Quick Start: Edge Node
+
+Example edge node:
+
+```text
+192.168.0.34
+```
+
+Clone repo:
+
+```bash
+git clone git@github.com:saeron-solution/saeron-server-monitor.git
+cd saeron-server-monitor
+```
+
+Create `.env`:
+
+```bash
+cat > .env <<'EOF'
+NODE_NAME=gpu-34
+CENTRAL_HOST=192.168.0.73
+
+LOKI_URL=http://192.168.0.73:13100/loki/api/v1/push
+
+NODE_EXPORTER_PORT=9100
+IPMI_EXPORTER_PORT=9290
+NVIDIA_GPU_EXPORTER_PORT=9835
+EOF
+```
+
+Start edge stack:
+
+```bash
+./scripts/edge-up.sh
+```
+
+Or:
+
+```bash
+./scripts/up.sh edge
+```
+
+Stop edge stack:
+
+```bash
+./scripts/edge-down.sh
+```
+
+Or:
+
+```bash
+./scripts/down.sh edge
+```
+
+---
+
+## Monitor the Central Server Itself
+
+If the central server should also appear as a monitored node, run both stacks on central:
+
+```bash
+./scripts/central-up.sh
+./scripts/edge-up.sh
+```
+
+This means the central machine runs:
+
+* Prometheus
+* Loki
+* Grafana
+* node-exporter
+* ipmi-exporter
+* nvidia-gpu-exporter
+* promtail
+
+---
+
+## Prometheus Target Configuration
+
+Prometheus target files are located under:
+
+```text
+prometheus/targets/
+```
+
+Recommended structure:
+
+```text
+prometheus/targets/
+├── node-exporter.yml
+├── ipmi-exporter.yml
+└── nvidia-gpu-exporter.yml
+```
+
+### `prometheus/targets/node-exporter.yml`
 
 ```yaml
-- job_name: node-exporter
-  static_configs:
-    - targets:
-        - gpu-node-01:9100      # DNS hostname
-        - 10.0.0.21:9100        # Or IP address
-      labels:
-        host: gpu-node-01
+- targets:
+    - 192.168.0.34:9100
+  labels:
+    host: gpu-34
+    role: edge
+
+- targets:
+    - 192.168.0.73:9100
+  labels:
+    host: gpu-73
+    role: central
 ```
 
-### Promtail Logs
+### `prometheus/targets/ipmi-exporter.yml`
 
-Logs are collected from `/var/log/**/*.log` on each edge node and pushed to central Loki.
+```yaml
+- targets:
+    - 192.168.0.34:9290
+  labels:
+    host: gpu-34
+    role: edge
 
-Label format:
+- targets:
+    - 192.168.0.73:9290
+  labels:
+    host: gpu-73
+    role: central
 ```
-job: varlogs
-node: gpu-node-01 (from NODE_NAME)
+
+### `prometheus/targets/nvidia-gpu-exporter.yml`
+
+```yaml
+- targets:
+    - 192.168.0.34:9835
+  labels:
+    host: gpu-34
+    role: edge
+
+- targets:
+    - 192.168.0.73:9835
+  labels:
+    host: gpu-73
+    role: central
 ```
 
-Query in Grafana: `{job="varlogs", node="gpu-node-01"}`
+Important: these target files are used by Prometheus `file_sd_configs`.
+
+They must use this format:
+
+```yaml
+- targets:
+    - host:port
+  labels:
+    key: value
+```
+
+Do **not** put `job_name` or `static_configs` inside these files.
+
+---
+
+## Reload Prometheus
+
+If Prometheus was started with `--web.enable-lifecycle`, reload without restart:
+
+```bash
+curl -X POST http://localhost:19090/-/reload
+```
+
+Or restart Prometheus:
+
+```bash
+docker compose -f docker-compose.central.yml restart prometheus
+```
+
+---
 
 ## Validation Commands
 
-### On Edge Node
+### Validate Compose Files
+
 ```bash
-# Check exporters are running and responding
-curl localhost:9100/metrics | head
-curl localhost:9290/metrics | grep -E 'fan|temp' | head
-curl localhost:9835/metrics | grep -E 'nvidia|gpu' | head
+docker compose -f docker-compose.central.yml config -q
+docker compose -f docker-compose.edge.yml config -q
 ```
 
-### On Central Server
+### Validate Prometheus Config
+
 ```bash
-# Check Prometheus is scraping all targets
-curl localhost:9090/api/v1/targets
-
-# Check Loki is ready for logs
-curl localhost:3100/ready
-
-# Access Grafana
-curl localhost:3000
+docker run --rm \
+  -v "$PWD/prometheus:/etc/prometheus:ro" \
+  prom/prometheus:v2.54.1 \
+  promtool check config /etc/prometheus/prometheus.yml
 ```
 
-## Security Notes
+### Validate Central Services
 
-⚠️ **Do not expose Prometheus, Loki, or exporter ports to the internet.**
+Run on central server:
 
-Recommended approaches:
-- **Private LAN only** (isolated network segment)
-- **VPN** (WireGuard, OpenVPN, Tailscale)
-- **SSH tunnel** (for remote Grafana access)
-- **Reverse proxy with HTTPS** (nginx, Traefik)
-- **Firewall rules** (iptables, ufw)
-
-Example SSH tunnel for Grafana access:
 ```bash
-ssh -L 3000:localhost:3000 central-server-user@central-server-ip
-# Open http://localhost:3000 on your laptop
+curl http://localhost:19090/-/ready
+curl http://localhost:13100/ready
+curl http://localhost:13000/api/health
 ```
+
+### Validate Edge Exporters
+
+Run on each edge node:
+
+```bash
+curl http://localhost:9100/metrics | head
+curl http://localhost:9290/metrics | head
+curl http://localhost:9835/metrics | head
+```
+
+### Validate Central Can Reach Edge
+
+Run on central server:
+
+```bash
+curl http://192.168.0.34:9100/metrics | head
+curl http://192.168.0.34:9290/metrics | head
+curl http://192.168.0.34:9835/metrics | head
+```
+
+### Check Prometheus Targets
+
+Open:
+
+```text
+http://192.168.0.73:19090/targets
+```
+
+Or query API:
+
+```bash
+curl -s http://localhost:19090/api/v1/targets | python -m json.tool
+```
+
+---
+
+## Ports
+
+| Service             | Container Port | Recommended Host Port | Runs On |
+| ------------------- | -------------: | --------------------: | ------- |
+| Prometheus          |           9090 |                 19090 | Central |
+| Grafana             |           3000 |                 13000 | Central |
+| Loki                |           3100 |                 13100 | Central |
+| node-exporter       |           9100 |                  9100 | Edge    |
+| ipmi-exporter       |           9290 |                  9290 | Edge    |
+| nvidia-gpu-exporter |           9835 |                  9835 | Edge    |
+| promtail            |           9080 |           not exposed | Edge    |
+
+The host ports for Prometheus, Grafana, and Loki are intentionally shifted away from common defaults to avoid conflicts on shared servers.
+
+---
+
+## Scripts
+
+### Easy Commands
+
+```bash
+./scripts/central-up.sh
+./scripts/central-down.sh
+./scripts/edge-up.sh
+./scripts/edge-down.sh
+```
+
+### Generic Commands
+
+```bash
+./scripts/up.sh central
+./scripts/down.sh central
+
+./scripts/up.sh edge
+./scripts/down.sh edge
+```
+
+### Start One Service
+
+```bash
+./scripts/up.sh central prometheus
+./scripts/up.sh edge node-exporter
+```
+
+---
 
 ## Troubleshooting
 
-### Edge node metrics not showing in Prometheus
-1. Check edge node is running: `docker ps`
-2. Check Prometheus can reach edge node: `curl <edge-ip>:9100/metrics`
-3. Check `prometheus/targets/edge-nodes.yml` has the correct IP/hostname
-4. Reload Prometheus: `curl -X POST http://central:9090/-/reload`
+### Prometheus Cannot See Edge Metrics
 
-### Logs not appearing in Loki
-1. Check `promtail` is running on edge: `docker ps`
-2. Check Loki is accessible: `curl <central-ip>:3100/ready`
-3. Verify `LOKI_URL` in `.env` is correct
-4. Check `promtail/config.yml` is reading `/var/log/**/*.log`
+Check from central:
 
-### IPMI metrics are empty
-1. Check `/dev/ipmi0` exists on edge node: `ls -l /dev/ipmi0`
-2. Load kernel modules: `sudo modprobe ipmi_devintf ipmi_si`
-3. Restart ipmi-exporter: `docker compose -f docker-compose.edge.yml restart ipmi-exporter`
+```bash
+curl http://192.168.0.34:9100/metrics | head
+```
 
-### NVIDIA GPU metrics not appearing
-1. Check NVIDIA driver: `nvidia-smi`
-2. Check NVIDIA Container Toolkit: `docker info | grep nvidia`
-3. Install if missing: `sudo apt-get install nvidia-container-toolkit`
-4. Restart Docker: `sudo systemctl restart docker`
-5. Restart edge services: `docker compose -f docker-compose.edge.yml up -d`
+If this fails:
 
-## Services Included
+* edge container may not be running
+* firewall may block the port
+* wrong edge IP in target file
+* exporter port may be different from target file
 
-**Central Server:**
-- `prometheus` (metrics storage, 15s scrape interval)
-- `loki` (log aggregation)
-- `grafana` (dashboard UI, auto-provisioned)
+Check containers:
 
-**Edge Node:**
-- `node-exporter` (host CPU, memory, disk, load)
-- `ipmi-exporter` (hardware sensors, fans, temperature)
-- `nvidia-gpu-exporter` (GPU utilization, memory, temperature)
-- `promtail` (log collection and push)
+```bash
+docker ps
+```
 
-## Grafana Dashboards
+Check Prometheus target page:
 
-Pre-configured dashboards auto-load from `grafana/dashboards/`:
-- **Server Overview** (CPU, Memory, Load, GPU)
-- More can be added as JSON files in the directory
+```text
+http://192.168.0.73:19090/targets
+```
 
-Datasources auto-configured:
-- Prometheus (metrics)
-- Loki (logs)
+### Loki Logs Not Appearing
 
-## Default Ports
+Check Promtail logs on edge:
 
-| Service | Port | Host |
-|---------|------|------|
-| Prometheus | 9090 | Central |
-| Grafana | 3000 | Central |
-| Loki | 3100 | Central |
-| node-exporter | 9100 | Edge |
-| ipmi-exporter | 9290 | Edge |
-| nvidia-gpu-exporter | 9835 | Edge |
+```bash
+docker compose -f docker-compose.edge.yml logs --tail=100 promtail
+```
+
+Check Loki from edge:
+
+```bash
+curl http://192.168.0.73:13100/ready
+```
+
+Check `.env`:
+
+```bash
+cat .env | grep LOKI_URL
+```
+
+Expected:
+
+```text
+LOKI_URL=http://192.168.0.73:13100/loki/api/v1/push
+```
+
+### IPMI Exporter Fails
+
+Check device:
+
+```bash
+ls -l /dev/ipmi0
+```
+
+Try loading modules:
+
+```bash
+sudo modprobe ipmi_devintf ipmi_si
+```
+
+Restart edge stack:
+
+```bash
+./scripts/edge-up.sh
+```
+
+If the machine does not support IPMI, remove its IPMI target from `prometheus/targets/ipmi-exporter.yml`.
+
+### NVIDIA GPU Exporter Fails
+
+Check driver:
+
+```bash
+nvidia-smi
+```
+
+Check Docker NVIDIA runtime/toolkit:
+
+```bash
+docker info | grep -i nvidia
+```
+
+Restart Docker if needed:
+
+```bash
+sudo systemctl restart docker
+./scripts/edge-up.sh
+```
+
+### Port Conflict
+
+Check used ports:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Ports}}"
+sudo ss -tulpn | grep -E ':19090|:13000|:13100|:9100|:9290|:9835'
+```
+
+Change `.env` if needed.
+
+---
+
+## Security Notes
+
+Do not expose Prometheus, Loki, Grafana, or exporter ports directly to the public internet.
+
+Recommended access patterns:
+
+* private LAN only
+* VPN such as WireGuard or Tailscale
+* SSH tunnel
+* reverse proxy with HTTPS and authentication
+* firewall rules limiting access to trusted IPs
+
+Example SSH tunnel for Grafana:
+
+```bash
+ssh -L 13000:localhost:13000 user@192.168.0.73
+```
+
+Then open:
+
+```text
+http://localhost:13000
+```
+
+---
 
 ## File Structure
 
-```
+```text
 server-observability/
-├── docker-compose.central.yml    # Central server stack
-├── docker-compose.edge.yml       # Edge node stack
-├── docker-compose.yml            # Legacy all-in-one
-├── .env.example                  # Configuration template
-├── README.md                      # This file
+├── docker-compose.central.yml
+├── docker-compose.edge.yml
+├── .env.example
+├── README.md
+├── scripts/
+│   ├── central-up.sh
+│   ├── central-down.sh
+│   ├── edge-up.sh
+│   ├── edge-down.sh
+│   ├── up.sh
+│   └── down.sh
 ├── prometheus/
-│   ├── prometheus.yml            # Prometheus config
+│   ├── prometheus.yml
 │   └── targets/
-│       └── edge-nodes.yml        # Edge node targets (to be edited)
+│       ├── node-exporter.yml
+│       ├── ipmi-exporter.yml
+│       └── nvidia-gpu-exporter.yml
 ├── loki/
-│   └── config.yml                # Loki config
+│   └── config.yml
 ├── promtail/
-│   └── config.yml                # Promtail config (uses env vars)
+│   └── config.yml
 ├── ipmi_exporter/
-│   └── ipmi_local.yml            # IPMI exporter config
+│   └── ipmi_local.yml
 └── grafana/
     ├── provisioning/
-    │   ├── datasources/          # Prometheus, Loki datasources
-    │   └── dashboards/           # Dashboard provisioning
+    │   ├── datasources/
+    │   └── dashboards/
     └── dashboards/
-        └── server-overview.json  # Pre-built dashboard
+        └── server-overview.json
 ```
-
-## Notes
-
-- Prometheus uses **pull-based** metrics collection (scrapes edge nodes)
-- Promtail uses **push-based** log collection (sends to central Loki)
-- Both metrics and logs are labeled with node name for easy querying
-- No persistent data is lost if a single edge node goes down
-- Central Prometheus can be scaled with remote storage (e.g., Cortex, Thanos)
-- Edge nodes are stateless and can be easily replaced
