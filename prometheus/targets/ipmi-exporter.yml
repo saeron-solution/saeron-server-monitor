@@ -3,9 +3,11 @@
   labels:
     host: gpu-34
     role: edge
+    site: local
 
 - targets:
     - 192.168.0.73:9290
   labels:
     host: gpu-73
     role: central
+    site: local

@@ -3,7 +3,6 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # Prometheus self-monitoring.
   - job_name: prometheus
     static_configs:
       - targets:
@@ -11,16 +10,14 @@ scrape_configs:
         labels:
           host: gpu-73
           role: central
-          exporter: prometheus
+          site: local
 
-  # Linux host metrics.
   - job_name: node_exporter
     file_sd_configs:
       - files:
           - /etc/prometheus/targets/node-exporter.yml
         refresh_interval: 30s
 
-  # IPMI hardware metrics.
   - job_name: ipmi_exporter
     scrape_timeout: 10s
     file_sd_configs:
@@ -28,7 +25,6 @@ scrape_configs:
           - /etc/prometheus/targets/ipmi-exporter.yml
         refresh_interval: 30s
 
-  # NVIDIA GPU metrics.
   - job_name: nvidia_gpu_exporter
     file_sd_configs:
       - files:

@@ -15,6 +15,6 @@ scrape_configs:
           - localhost
         labels:
           job: varlogs
-          node: ${NODE_NAME}
           host: ${NODE_NAME}
+          node: ${NODE_NAME}
           __path__: /var/log/**/*.log
