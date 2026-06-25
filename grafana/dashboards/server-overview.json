@@ -158,7 +158,7 @@
         "justifyMode": "auto"
       },
       "targets": [
-        { "expr": "up{job=\"ipmi-exporter\"}", "refId": "A", "legendFormat": "Exporter up" },
+        { "expr": "up{job=\"ipmi_exporter\"}", "refId": "A", "legendFormat": "Exporter up" },
         { "expr": "ipmi_up{collector=\"ipmi\"}", "refId": "B", "legendFormat": "IPMI collector up" }
       ],
       "title": "IPMI Health",
